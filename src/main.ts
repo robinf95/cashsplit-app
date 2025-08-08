@@ -1,10 +1,11 @@
-import { createApp, h } from 'vue'
-import { createPinia } from 'pinia'
-import App from './App.vue'
-import router from './router'
+
 import './app.css'
 
 import { Clerk } from '@clerk/clerk-js'
+import router from "./router";
+import {createPinia} from "pinia";
+import {createApp, h} from "vue";
+import App from "./App.vue";
 const clerkPubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
 const clerk = new Clerk(clerkPubKey || 'pk_test_replace_me')
 await clerk.load()

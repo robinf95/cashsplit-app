@@ -10,8 +10,10 @@
     "db:init": "node ./db/init.mjs"
   },
   "dependencies": {
+    "@clerk/backend": "^2.7.0",
     "@clerk/clerk-js": "^5.14.0",
-    "@clerk/clerk-sdk-node": "^6.7.4",
+    "@clerk/vue": "^1.9.3",
+    "@vercel/node": "^5.3.11",
     "@vercel/postgres": "^0.10.0",
     "pinia": "^2.1.7",
     "vue": "^3.4.27",
