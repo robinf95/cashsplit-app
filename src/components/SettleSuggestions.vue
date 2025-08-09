@@ -1,15 +1,28 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { useExpenseStore } from '../stores/expenses'
+import { useExpenseStore, type Currency } from '../stores/expenses'
 
 interface Props {
   groupId: string
+}
+
+type SettlementWithCurrency = {
+  from: string
+  to: string
+  amount: number
+  originalAmount: number
+  convertedAmount: number
+  currency: Currency
 }
 
 const props = defineProps<Props>()
 const store = useExpenseStore()
 const isSettling = ref(false)
 const showSuccessMessage = ref(false)
+const selectedCurrency = ref<Currency | null>(null)
+
+// Available currencies
+const availableCurrencies: Currency[] = ['EUR', 'USD', 'CHF', 'GBP']
 
 // Get settlements for this group
 const settlements = computed(() => store.settlements(props.groupId))
@@ -20,9 +33,72 @@ const groupCurrency = computed(() => {
   return group?.currency || 'EUR'
 })
 
+// Initialize selected currency to group currency
+if (!selectedCurrency.value) {
+  selectedCurrency.value = groupCurrency.value
+}
+
+// Convert amount from group currency to selected currency
+const convertAmount = (amount: number, fromCurrency: Currency, toCurrency: Currency): number => {
+  if (fromCurrency === toCurrency) return amount
+
+  const exchangeKey = `${fromCurrency}->${toCurrency}`
+  const rate = store.fx[exchangeKey]
+
+  if (rate) {
+    return amount * rate
+  }
+
+  // Fallback: try reverse rate
+  const reverseKey = `${toCurrency}->${fromCurrency}`
+  const reverseRate = store.fx[reverseKey]
+  if (reverseRate) {
+    return amount / reverseRate
+  }
+
+  // If no rate available, return original amount
+  console.warn(`No exchange rate found for ${fromCurrency} to ${toCurrency}`)
+  return amount
+}
+
+// Get settlements with converted amounts
+const settlementsWithCurrency = computed((): SettlementWithCurrency[] => {
+  if (!selectedCurrency.value) {
+    return settlements.value.map(settlement => ({
+      ...settlement,
+      originalAmount: settlement.amount,
+      convertedAmount: settlement.amount,
+      currency: groupCurrency.value
+    }))
+  }
+
+  return settlements.value.map(settlement => ({
+    ...settlement,
+    originalAmount: settlement.amount,
+    convertedAmount: convertAmount(settlement.amount, groupCurrency.value, selectedCurrency.value!),
+    currency: selectedCurrency.value!
+  }))
+})
+
+// Check if exchange rates are needed and available
+const hasExchangeRates = computed(() => {
+  if (selectedCurrency.value === groupCurrency.value) return true
+
+  const exchangeKey = `${groupCurrency.value}->${selectedCurrency.value}`
+  const reverseKey = `${selectedCurrency.value}->${groupCurrency.value}`
+
+  return !!(store.fx[exchangeKey] || store.fx[reverseKey])
+})
+
 // Settle all payments by creating balancing expenses
 const settleAllPayments = async () => {
-  if (settlements.value.length === 0) return
+  if (settlements.value.length === 0 || !selectedCurrency.value) return
+
+  // Check if we need exchange rates and don't have them
+  if (!hasExchangeRates.value) {
+    alert(`Keine Wechselkurse für ${groupCurrency.value} → ${selectedCurrency.value} verfügbar. Bitte aktualisieren Sie die Wechselkurse.`)
+    return
+  }
 
   isSettling.value = true
   showSuccessMessage.value = false
@@ -31,15 +107,21 @@ const settleAllPayments = async () => {
     const currentDate = new Date().toISOString().split('T')[0]
 
     // Create settlement expenses for each required payment
-    for (const settlement of settlements.value) {
+    for (const settlement of settlementsWithCurrency.value) {
+      // Use converted amount for the actual expense
+      const expenseAmount = settlement.convertedAmount
+      const currencyNote = selectedCurrency.value !== groupCurrency.value
+        ? ` (${settlement.originalAmount.toFixed(2)} ${groupCurrency.value} → ${settlement.convertedAmount.toFixed(2)} ${selectedCurrency.value})`
+        : ''
+
       await store.addExpense({
         groupId: props.groupId,
         payer: settlement.from,
         for: [settlement.to],
-        amount: settlement.amount,
-        note: `Ausgleichszahlung: ${settlement.from} → ${settlement.to}`,
+        amount: expenseAmount,
+        note: `Ausgleichszahlung: ${settlement.from} → ${settlement.to}${currencyNote}`,
         date: currentDate,
-        currency: groupCurrency.value
+        currency: selectedCurrency.value
       })
     }
 
@@ -66,9 +148,34 @@ const settleAllPayments = async () => {
       💰 Ausgleichsvorschläge
     </h3>
 
+    <!-- Currency Selection -->
+    <div class="mb-4 p-3 bg-white rounded border">
+      <label class="block text-sm font-medium text-gray-700 mb-2">
+        Zahlungswährung wählen:
+      </label>
+      <div class="flex items-center space-x-4">
+        <select
+          v-model="selectedCurrency"
+          class="block w-32 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+        >
+          <option v-for="currency in availableCurrencies" :key="currency" :value="currency">
+            {{ currency }}
+          </option>
+        </select>
+
+        <div v-if="selectedCurrency !== groupCurrency" class="text-sm text-gray-600">
+          Umrechnung von {{ groupCurrency }} → {{ selectedCurrency }}
+          <span v-if="!hasExchangeRates" class="text-red-600 font-medium ml-1">
+            (Keine Wechselkurse verfügbar!)
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Settlement List -->
     <div class="space-y-2 mb-4">
       <div
-        v-for="settlement in settlements"
+        v-for="settlement in settlementsWithCurrency"
         :key="`${settlement.from}-${settlement.to}`"
         class="flex items-center justify-between p-3 bg-white rounded border"
       >
@@ -77,8 +184,13 @@ const settleAllPayments = async () => {
           <span class="text-gray-500">→</span>
           <span class="font-medium text-gray-700">{{ settlement.to }}</span>
         </div>
-        <div class="font-bold text-green-600">
-          {{ settlement.amount.toFixed(2) }} {{ groupCurrency }}
+        <div class="text-right">
+          <div class="font-bold text-green-600">
+            {{ settlement.convertedAmount.toFixed(2) }} {{ selectedCurrency }}
+          </div>
+          <div v-if="selectedCurrency !== groupCurrency && hasExchangeRates" class="text-xs text-gray-500">
+            ({{ settlement.originalAmount.toFixed(2) }} {{ groupCurrency }})
+          </div>
         </div>
       </div>
     </div>
@@ -86,11 +198,14 @@ const settleAllPayments = async () => {
     <div class="flex items-center justify-between pt-3 border-t border-blue-200">
       <div class="text-sm text-blue-700">
         {{ settlements.length }} Überweisung{{ settlements.length !== 1 ? 'en' : '' }} erforderlich
+        <span v-if="selectedCurrency !== groupCurrency">
+          in {{ selectedCurrency }}
+        </span>
       </div>
 
       <button
         @click="settleAllPayments"
-        :disabled="isSettling"
+        :disabled="isSettling || !hasExchangeRates"
         class="px-4 py-2 bg-green-600 text-white font-medium rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
       >
         <span v-if="isSettling" class="flex items-center">
@@ -101,9 +216,21 @@ const settleAllPayments = async () => {
           Wird ausgeglichen...
         </span>
         <span v-else>
-          🏦 Alle Zahlungen ausgleichen
+          🏦 Alle Zahlungen ausgleichen{{ selectedCurrency !== groupCurrency ? ` (${selectedCurrency})` : '' }}
         </span>
       </button>
+    </div>
+
+    <!-- Exchange Rate Warning -->
+    <div v-if="selectedCurrency !== groupCurrency && !hasExchangeRates" class="mt-3 p-3 bg-yellow-100 border border-yellow-300 rounded-lg">
+      <div class="flex items-center">
+        <svg class="h-5 w-5 text-yellow-500 mr-2" fill="currentColor" viewBox="0 0 20 20">
+          <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+        </svg>
+        <span class="text-yellow-800">
+          Keine Wechselkurse für {{ groupCurrency }} → {{ selectedCurrency }} verfügbar. Bitte aktualisieren Sie die Wechselkurse in den Einstellungen.
+        </span>
+      </div>
     </div>
 
     <!-- Success Message -->
