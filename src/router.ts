@@ -14,7 +14,20 @@ const router = createRouter({ history: createWebHistory(), routes })
 
 router.beforeEach(async (to, from, next) => {
   const clerk = (window as any).Clerk
-  if (to.meta.requiresAuth && !clerk?.user) return next('/signin')
+
+  // Wait for Clerk to be fully loaded
+  if (!clerk) {
+    return next()
+  }
+
+  // Check if route requires authentication
+  if (to.meta.requiresAuth) {
+    // Wait for user state to be determined
+    if (clerk.loaded && !clerk.user) {
+      return next('/signin')
+    }
+  }
+
   next()
 })
 

@@ -8,14 +8,26 @@ import App from "./App.vue";
 
 async function initializeApp() {
   const clerkPubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
-  const clerk = new Clerk(clerkPubKey || 'pk_test_replace_me')
-  await clerk.load()
-  ;(window as any).Clerk = clerk
 
-  const app = createApp({ render: () => h(App) })
-  app.use(createPinia())
-  app.use(router)
-  app.mount('#app')
+  if (!clerkPubKey) {
+    console.error('VITE_CLERK_PUBLISHABLE_KEY is not defined')
+    return
+  }
+
+  try {
+    const clerk = new Clerk(clerkPubKey)
+    await clerk.load()
+    ;(window as any).Clerk = clerk
+
+    const app = createApp({ render: () => h(App) })
+    app.use(createPinia())
+    app.use(router)
+    app.mount('#app')
+
+    console.log('Clerk initialized successfully')
+  } catch (error) {
+    console.error('Failed to initialize Clerk:', error)
+  }
 }
 
 initializeApp()
