@@ -24,6 +24,7 @@ export type Expense = {
   date: string
   currency?: Currency
   user_id?: string
+  archived?: boolean
 }
 
 type State = {
@@ -56,7 +57,8 @@ export const useExpenseStore = defineStore('expenses', {
       const bal: Record<string, number> = {}
       g.members.forEach(m => bal[m] = 0)
 
-      s.expenses.filter(e => e.groupId === groupId).forEach(e => {
+      // Only consider non-archived expenses for balance calculation
+      s.expenses.filter(e => e.groupId === groupId && !e.archived).forEach(e => {
         const eCur = e.currency || g.currency
         const factor = (eCur === g.currency) ? 1 : (s.fx[`${eCur}->${g.currency}`] || 1)
         const amt = e.amount * factor
@@ -88,6 +90,14 @@ export const useExpenseStore = defineStore('expenses', {
         }
         return res
       }
+    },
+    // Get active (non-archived) expenses for a group
+    activeExpenses: (s) => (groupId: string) => {
+      return s.expenses.filter(e => e.groupId === groupId && !e.archived)
+    },
+    // Get archived expenses for a group
+    archivedExpenses: (s) => (groupId: string) => {
+      return s.expenses.filter(e => e.groupId === groupId && e.archived)
     }
   },
 
@@ -410,6 +420,43 @@ export const useExpenseStore = defineStore('expenses', {
         this.expenses = []
       } catch (error) {
         console.error('Failed to reset all data:', error)
+        throw error
+      }
+    },
+
+    // Archive all active expenses for a group (used before settlement)
+    async archiveActiveExpenses(groupId: string) {
+      if (!this.currentUserId) throw new Error('User not authenticated')
+
+      try {
+        // Archive all non-archived expenses for this group
+        const expensesToArchive = this.expenses.filter(e => e.groupId === groupId && !e.archived)
+
+        for (const expense of expensesToArchive) {
+          // Update in database (assuming we'll add this to SupabaseService)
+          // For now, just update locally
+          expense.archived = true
+        }
+
+        console.log(`Archived ${expensesToArchive.length} expenses for group ${groupId}`)
+      } catch (error) {
+        console.error('Failed to archive expenses:', error)
+        throw error
+      }
+    },
+
+    // Toggle archive status of a single expense
+    async toggleExpenseArchive(expenseId: string) {
+      if (!this.currentUserId) throw new Error('User not authenticated')
+
+      try {
+        const expense = this.expenses.find(e => e.id === expenseId)
+        if (expense) {
+          expense.archived = !expense.archived
+          // TODO: Update in database when SupabaseService supports it
+        }
+      } catch (error) {
+        console.error('Failed to toggle expense archive status:', error)
         throw error
       }
     }

@@ -104,6 +104,9 @@ const settleAllPayments = async () => {
   showSuccessMessage.value = false
 
   try {
+    // First, archive all active expenses before settlement
+    await store.archiveActiveExpenses(props.groupId)
+
     const currentDate = new Date().toISOString().split('T')[0]
 
     // Create settlement expenses for each required payment
