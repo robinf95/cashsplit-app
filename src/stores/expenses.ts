@@ -325,6 +325,21 @@ export const useExpenseStore = defineStore('expenses', {
       }
     },
 
+    async deleteGroup(id: string) {
+      if (!this.currentUserId) throw new Error('User not authenticated')
+
+      try {
+        await SupabaseService.deleteGroup(id, this.currentUserId)
+
+        // Remove group and its expenses from local state
+        this.groups = this.groups.filter(g => g.id !== id)
+        this.expenses = this.expenses.filter(e => e.groupId !== id)
+      } catch (error) {
+        console.error('Failed to delete group:', error)
+        throw error
+      }
+    },
+
     async addExpense(e: Omit<Expense,'id'>) {
       if (!this.currentUserId) throw new Error('User not authenticated')
 
