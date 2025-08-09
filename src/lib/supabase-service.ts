@@ -6,6 +6,7 @@ export interface Group {
   user_id: string
   name: string
   currency: string
+  members: string[]
   created_at: string
 }
 
@@ -27,7 +28,7 @@ export class SupabaseService {
   static async getGroups(userId: string): Promise<Group[]> {
     const { data, error } = await supabase
       .from('groups')
-      .select('id, user_id, name, currency, created_at')
+      .select('id, user_id, name, currency, members, created_at')
       .eq('user_id', userId)
       .order('created_at', { ascending: false })
 
@@ -35,15 +36,25 @@ export class SupabaseService {
     return data || []
   }
 
-  static async createGroup(userId: string, name: string, currency: string = 'EUR'): Promise<string> {
+  static async createGroup(userId: string, name: string, currency: string = 'EUR', members: string[] = []): Promise<string> {
     const { data, error } = await supabase
       .from('groups')
-      .insert([{ user_id: userId, name, currency }])
+      .insert([{ user_id: userId, name, currency, members }])
       .select('id')
       .single()
     
     if (error) throw error
     return data.id
+  }
+
+  static async updateGroup(groupId: string, userId: string, updates: { name?: string; currency?: string }): Promise<void> {
+    const { error } = await supabase
+      .from('groups')
+      .update(updates)
+      .eq('id', groupId)
+      .eq('user_id', userId)
+
+    if (error) throw error
   }
 
   static async deleteGroup(groupId: string, userId: string): Promise<void> {
@@ -71,7 +82,7 @@ export class SupabaseService {
   static async createExpense(expense: Omit<Expense, 'id' | 'date'>): Promise<string> {
     const { data, error } = await supabase
       .from('expenses')
-      .insert([expense])
+      .insert([{ ...expense, date: new Date().toISOString() }])
       .select('id')
       .single()
     
@@ -128,5 +139,47 @@ export class SupabaseService {
         }
       )
       .subscribe()
+  }
+
+  // Members operations (assuming members are stored as JSON in groups table or separate table)
+  static async updateGroupMembers(groupId: string, userId: string, members: string[]): Promise<void> {
+    const { error } = await supabase
+      .from('groups')
+      .update({ members })
+      .eq('id', groupId)
+      .eq('user_id', userId)
+
+    if (error) throw error
+  }
+
+  // Get user ID from current session
+  static async getCurrentUserId(): Promise<string | null> {
+    const { data: { user } } = await supabase.auth.getUser()
+    return user?.id || null
+  }
+
+  // Exchange rates storage (if needed)
+  static async updateExchangeRates(userId: string, rates: Record<string, number>, base: string): Promise<void> {
+    const { error } = await supabase
+      .from('user_settings')
+      .upsert([{
+        user_id: userId,
+        exchange_rates: rates,
+        base_currency: base,
+        updated_at: new Date().toISOString()
+      }])
+
+    if (error) throw error
+  }
+
+  static async getExchangeRates(userId: string): Promise<{ rates: Record<string, number>; base: string } | null> {
+    const { data, error } = await supabase
+      .from('user_settings')
+      .select('exchange_rates, base_currency')
+      .eq('user_id', userId)
+      .single()
+
+    if (error && error.code !== 'PGRST116') throw error
+    return data ? { rates: data.exchange_rates || {}, base: data.base_currency || 'EUR' } : null
   }
 }

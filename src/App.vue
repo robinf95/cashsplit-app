@@ -1,10 +1,53 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { onMounted, ref, watch } from 'vue'
+import { useExpenseStore } from './stores/expenses'
+
 const clerk: any = (window as any).Clerk
 const user = ref<any>(null)
-onMounted(async () => { try { user.value = await clerk.user?.reload?.() || clerk.user } catch {} })
-const signOut = async () => { await clerk.signOut(); location.href = '/signin' }
-const openSignIn = async () => { await clerk.openSignIn() }
+const expenseStore = useExpenseStore()
+let isInitialized = false
+
+onMounted(async () => {
+  try {
+    user.value = await clerk.user?.reload?.() || clerk.user
+
+    // Initialize the store only once after mounting
+    if (!isInitialized) {
+      await expenseStore.initialize()
+      isInitialized = true
+    }
+  } catch (error) {
+    console.error('Error during app initialization:', error)
+    // Initialize store even on error to provide demo data
+    if (!isInitialized) {
+      await expenseStore.initialize()
+      isInitialized = true
+    }
+  }
+})
+
+// Watch for user changes and reinitialize store only when needed
+watch(user, async (newUser, oldUser) => {
+  // Only reinitialize if user actually changed (not just initial load)
+  if (oldUser !== undefined && newUser?.id !== oldUser?.id) {
+    if (newUser) {
+      await expenseStore.initialize()
+    } else {
+      // Clear store when user signs out
+      expenseStore.$reset()
+      isInitialized = false
+    }
+  }
+}, { immediate: false })
+
+const signOut = async () => {
+  await clerk.signOut()
+  location.href = '/signin'
+}
+
+const openSignIn = async () => {
+  await clerk.openSignIn()
+}
 </script>
 
 <template>
