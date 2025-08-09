@@ -33,6 +33,7 @@ type State = {
   base: Currency
   currentUserId: string | null
   loading: boolean
+  isLoadingUserData: boolean
 }
 
 export const useExpenseStore = defineStore('expenses', {
@@ -42,7 +43,8 @@ export const useExpenseStore = defineStore('expenses', {
     fx: {},
     base: 'EUR',
     currentUserId: null,
-    loading: false
+    loading: false,
+    isLoadingUserData: false
   }),
 
   getters: {
@@ -156,6 +158,10 @@ export const useExpenseStore = defineStore('expenses', {
     async loadUserData() {
       if (!this.currentUserId) return
 
+      // Prevent concurrent loading
+      if (this.isLoadingUserData) return
+      this.isLoadingUserData = true
+
       try {
         // Load groups
         const supabaseGroups = await SupabaseService.getGroups(this.currentUserId)
@@ -168,21 +174,29 @@ export const useExpenseStore = defineStore('expenses', {
           created_at: g.created_at
         }))
 
-        // Load expenses for all groups
+        // Load expenses for all groups with duplicate prevention
         this.expenses = []
+        const loadedExpenseIds = new Set<string>()
+
         for (const group of this.groups) {
           const groupExpenses = await SupabaseService.getExpenses(group.id)
-          this.expenses.push(...groupExpenses.map(e => ({
-            id: e.id,
-            groupId: e.group_id,
-            payer: e.payer,
-            for: e.for_members,
-            amount: e.amount,
-            note: e.note,
-            date: e.date,
-            currency: e.currency as Currency,
-            user_id: e.user_id
-          })))
+          const newExpenses = groupExpenses
+            .filter(e => !loadedExpenseIds.has(e.id)) // Prevent duplicates
+            .map(e => {
+              loadedExpenseIds.add(e.id) // Track loaded expense
+              return {
+                id: e.id,
+                groupId: e.group_id,
+                payer: e.payer,
+                for: e.for_members,
+                amount: e.amount,
+                note: e.note,
+                date: e.date,
+                currency: e.currency as Currency,
+                user_id: e.user_id
+              }
+            })
+          this.expenses.push(...newExpenses)
         }
 
         // Load exchange rates
@@ -193,6 +207,8 @@ export const useExpenseStore = defineStore('expenses', {
         }
       } catch (error) {
         console.error('Failed to load user data:', error)
+      } finally {
+        this.isLoadingUserData = false
       }
     },
 
