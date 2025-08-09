@@ -12,9 +12,18 @@ const currency = ref<Currency>('EUR')
 async function create() {
   const members = memberNames.value.split(',').map(x=>x.trim()).filter(Boolean)
   if (!groupName.value || members.length < 1) return
-  s.addGroup(groupName.value, members, currency.value)
-  const id = s.groups[s.groups.length-1].id
-  router.push(`/groups/${id}`)
+
+  try {
+    await s.addGroup(groupName.value, members, currency.value)
+    // Now get the ID from the last group that was actually added
+    const newGroup = s.groups[s.groups.length-1]
+    if (newGroup?.id) {
+      router.push(`/groups/${newGroup.id}`)
+    }
+  } catch (error) {
+    console.error('Failed to create group:', error)
+    // Show error to user or handle gracefully
+  }
 }
 </script>
 

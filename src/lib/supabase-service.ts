@@ -160,26 +160,46 @@ export class SupabaseService {
 
   // Exchange rates storage (if needed)
   static async updateExchangeRates(userId: string, rates: Record<string, number>, base: string): Promise<void> {
-    const { error } = await supabase
-      .from('user_settings')
-      .upsert([{
-        user_id: userId,
-        exchange_rates: rates,
-        base_currency: base,
-        updated_at: new Date().toISOString()
-      }])
+    try {
+      const { error } = await supabase
+        .from('user_settings')
+        .upsert([{
+          user_id: userId,
+          exchange_rates: rates,
+          base_currency: base,
+          updated_at: new Date().toISOString()
+        }])
 
-    if (error) throw error
+      if (error) {
+        console.error('Error updating exchange rates:', error)
+        throw error
+      }
+    } catch (error) {
+      console.error('Failed to update exchange rates:', error)
+      // Don't throw error to prevent app crashes
+    }
   }
 
   static async getExchangeRates(userId: string): Promise<{ rates: Record<string, number>; base: string } | null> {
-    const { data, error } = await supabase
-      .from('user_settings')
-      .select('exchange_rates, base_currency')
-      .eq('user_id', userId)
-      .single()
+    try {
+      const { data, error } = await supabase
+        .from('user_settings')
+        .select('exchange_rates, base_currency')
+        .eq('user_id', userId)
+        .maybeSingle() // Use maybeSingle instead of single to handle missing records
 
-    if (error && error.code !== 'PGRST116') throw error
-    return data ? { rates: data.exchange_rates || {}, base: data.base_currency || 'EUR' } : null
+      if (error) {
+        console.error('Error fetching exchange rates:', error)
+        return null
+      }
+
+      return data ? {
+        rates: data.exchange_rates || {},
+        base: data.base_currency || 'EUR'
+      } : null
+    } catch (error) {
+      console.error('Failed to fetch exchange rates:', error)
+      return null
+    }
   }
 }
