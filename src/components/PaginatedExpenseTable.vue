@@ -1,38 +1,42 @@
 <template>
   <div class="mt-6">
     <!-- Toggle Buttons -->
-    <div class="flex items-center justify-between mb-4">
-      <div class="flex bg-gray-100 rounded-lg p-1">
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 gap-3">
+      <div class="flex bg-gray-100 rounded-lg p-1 w-full sm:w-auto">
         <button
           @click="showArchived = false"
           :class="[
-            'px-4 py-2 rounded-md font-medium transition-colors',
+            'flex-1 sm:flex-none px-2 sm:px-4 py-2 rounded-md text-sm font-medium transition-colors',
             !showArchived
               ? 'bg-white text-blue-600 shadow-sm'
               : 'text-gray-600 hover:text-gray-900'
           ]"
         >
-          📋 Aktive Zahlungen ({{ activeExpenses.length }})
+          <span class="hidden sm:inline">📋 Aktive Zahlungen</span>
+          <span class="sm:hidden">📋 Aktiv</span>
+          <span class="ml-1">({{ activeExpenses.length }})</span>
         </button>
         <button
           @click="showArchived = true"
           :class="[
-            'px-4 py-2 rounded-md font-medium transition-colors',
+            'flex-1 sm:flex-none px-2 sm:px-4 py-2 rounded-md text-sm font-medium transition-colors',
             showArchived
               ? 'bg-white text-blue-600 shadow-sm'
               : 'text-gray-600 hover:text-gray-900'
           ]"
         >
-          📦 Archivierte Zahlungen ({{ archivedExpenses.length }})
+          <span class="hidden sm:inline">📦 Archivierte Zahlungen</span>
+          <span class="sm:hidden">📦 Archiv</span>
+          <span class="ml-1">({{ archivedExpenses.length }})</span>
         </button>
       </div>
 
       <!-- Items per page selector -->
-      <div class="flex items-center space-x-2">
-        <label class="text-sm text-gray-600">Pro Seite:</label>
+      <div class="flex items-center justify-end space-x-2">
+        <label class="text-sm text-gray-600 whitespace-nowrap">Pro Seite:</label>
         <select
           v-model="itemsPerPage"
-          class="px-2 py-1 border border-gray-300 rounded text-sm"
+          class="px-2 py-1 border border-gray-300 rounded text-sm min-w-0"
         >
           <option :value="5">5</option>
           <option :value="10">10</option>
@@ -50,25 +54,25 @@
       </div>
 
       <div v-else class="overflow-x-auto">
-        <table class="w-full">
+        <table class="w-full min-w-full">
           <thead class="bg-gray-50">
             <tr>
-              <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th class="px-2 sm:px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Datum
               </th>
-              <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th class="px-2 sm:px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden sm:table-cell">
                 Zahler
               </th>
-              <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th class="px-2 sm:px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden md:table-cell">
                 Für
               </th>
-              <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th class="px-2 sm:px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Betrag
               </th>
-              <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th class="px-2 sm:px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden lg:table-cell">
                 Notiz
               </th>
-              <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th class="px-2 sm:px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Aktionen
               </th>
             </tr>
@@ -79,40 +83,58 @@
               :key="expense.id"
               :class="{ 'bg-gray-50': expense.archived }"
             >
-              <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                {{ formatDate(expense.date) }}
+              <!-- Date column -->
+              <td class="px-2 sm:px-4 py-3 text-xs sm:text-sm text-gray-900">
+                <div class="font-medium">{{ formatDate(expense.date) }}</div>
+                <!-- Show payer and recipients on mobile in a compact way -->
+                <div class="sm:hidden text-xs text-gray-500 mt-1">
+                  <div>{{ expense.payer }} → {{ expense.for.join(', ') }}</div>
+                  <div v-if="expense.note" class="mt-1 italic">{{ expense.note }}</div>
+                </div>
               </td>
-              <td class="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
+
+              <!-- Payer column (hidden on mobile) -->
+              <td class="px-2 sm:px-4 py-3 text-sm font-medium text-gray-900 hidden sm:table-cell">
                 {{ expense.payer }}
               </td>
-              <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                {{ expense.for.join(', ') }}
+
+              <!-- Recipients column (hidden on small and medium screens) -->
+              <td class="px-2 sm:px-4 py-3 text-sm text-gray-900 hidden md:table-cell">
+                <div class="max-w-32 truncate">{{ expense.for.join(', ') }}</div>
               </td>
-              <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                <span class="font-medium">{{ expense.amount.toFixed(2) }}</span>
-                <span class="text-gray-500 ml-1">{{ expense.currency || groupCurrency }}</span>
+
+              <!-- Amount column -->
+              <td class="px-2 sm:px-4 py-3 text-xs sm:text-sm text-gray-900">
+                <div class="font-medium">{{ expense.amount.toFixed(2) }}</div>
+                <div class="text-gray-500 text-xs">{{ expense.currency || groupCurrency }}</div>
               </td>
-              <td class="px-4 py-3 text-sm text-gray-900 max-w-xs truncate">
-                {{ expense.note || '-' }}
+
+              <!-- Note column (hidden on mobile and tablet) -->
+              <td class="px-2 sm:px-4 py-3 text-sm text-gray-900 hidden lg:table-cell">
+                <div class="max-w-32 truncate">{{ expense.note || '-' }}</div>
               </td>
-              <td class="px-4 py-3 whitespace-nowrap text-sm">
-                <div class="flex items-center space-x-2">
+
+              <!-- Actions column -->
+              <td class="px-1 sm:px-4 py-3 text-xs">
+                <div class="flex flex-col sm:flex-row items-start sm:items-center gap-1 sm:gap-2">
                   <button
                     @click="toggleArchive(expense.id)"
                     :class="[
-                      'px-2 py-1 rounded text-xs font-medium transition-colors',
+                      'px-1 sm:px-2 py-1 rounded text-xs font-medium transition-colors whitespace-nowrap',
                       expense.archived
                         ? 'bg-blue-100 text-blue-700 hover:bg-blue-200'
                         : 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200'
                     ]"
                   >
-                    {{ expense.archived ? '📤 Wiederherstellen' : '📦 Archivieren' }}
+                    <span class="sm:hidden">{{ expense.archived ? '📤' : '📦' }}</span>
+                    <span class="hidden sm:inline">{{ expense.archived ? '📤 Wiederherstellen' : '📦 Archivieren' }}</span>
                   </button>
                   <button
                     @click="deleteExpense(expense.id)"
-                    class="px-2 py-1 bg-red-100 text-red-700 hover:bg-red-200 rounded text-xs font-medium transition-colors"
+                    class="px-1 sm:px-2 py-1 bg-red-100 text-red-700 hover:bg-red-200 rounded text-xs font-medium transition-colors whitespace-nowrap"
                   >
-                    🗑️ Löschen
+                    <span class="sm:hidden">🗑️</span>
+                    <span class="hidden sm:inline">🗑️ Löschen</span>
                   </button>
                 </div>
               </td>
