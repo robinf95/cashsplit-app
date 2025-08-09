@@ -13,6 +13,7 @@
     "@clerk/backend": "^2.7.0",
     "@clerk/clerk-js": "^5.14.0",
     "@clerk/vue": "^1.9.3",
+    "@supabase/supabase-js": "^2.54.0",
     "@vercel/node": "^5.3.11",
     "@vercel/postgres": "^0.10.0",
     "pinia": "^2.1.7",
