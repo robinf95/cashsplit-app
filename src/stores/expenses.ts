@@ -197,24 +197,61 @@ export const useExpenseStore = defineStore('expenses', {
     },
 
     async refreshRates(base: Currency, symbols: Currency[]) {
-      const q = symbols.join(',')
-      const resp = await fetch(`/api/fx?base=${base}&symbols=${q}`)
-      if (!resp.ok) return
+      try {
+        const q = symbols.join(',')
+        const resp = await fetch(`/api/fx?base=${base}&symbols=${q}`)
 
-      const data = await resp.json()
-      for (const k of Object.keys(data.rates)) {
-        this.fx[`${base}->${k}`] = data.rates[k]
-        this.fx[`${k}->${base}`] = 1 / data.rates[k]
-      }
-      this.base = base
-
-      // Save to Supabase
-      if (this.currentUserId) {
-        try {
-          await SupabaseService.updateExchangeRates(this.currentUserId, this.fx, base)
-        } catch (error) {
-          console.error('Failed to save exchange rates:', error)
+        if (!resp.ok) {
+          console.warn(`Exchange rate API returned ${resp.status}, using fallback rates`)
+          // Use fallback static rates if API fails
+          this.setFallbackRates(base, symbols)
+          return
         }
+
+        const data = await resp.json()
+        if (data.rates) {
+          for (const k of Object.keys(data.rates)) {
+            this.fx[`${base}->${k}`] = data.rates[k]
+            this.fx[`${k}->${base}`] = 1 / data.rates[k]
+          }
+          this.base = base
+
+          // Save to Supabase
+          if (this.currentUserId) {
+            try {
+              await SupabaseService.updateExchangeRates(this.currentUserId, this.fx, base)
+            } catch (error) {
+              console.error('Failed to save exchange rates:', error)
+            }
+          }
+        } else {
+          console.warn('No rates in API response, using fallback')
+          this.setFallbackRates(base, symbols)
+        }
+      } catch (error) {
+        console.error('Failed to fetch exchange rates:', error)
+        this.setFallbackRates(base, symbols)
+      }
+    },
+
+    setFallbackRates(base: Currency, symbols: Currency[]) {
+      // Fallback exchange rates (approximate values)
+      const fallbackRates: Record<string, Record<string, number>> = {
+        EUR: { EUR: 1, USD: 1.09, CHF: 0.94, GBP: 0.84 },
+        USD: { EUR: 0.92, USD: 1, CHF: 0.86, GBP: 0.77 },
+        CHF: { EUR: 1.06, USD: 1.16, CHF: 1, GBP: 0.89 },
+        GBP: { EUR: 1.19, USD: 1.30, CHF: 1.12, GBP: 1 }
+      }
+
+      if (fallbackRates[base]) {
+        for (const symbol of symbols) {
+          if (fallbackRates[base][symbol]) {
+            this.fx[`${base}->${symbol}`] = fallbackRates[base][symbol]
+            this.fx[`${symbol}->${base}`] = 1 / fallbackRates[base][symbol]
+          }
+        }
+        this.base = base
+        console.log('Using fallback exchange rates')
       }
     },
 
