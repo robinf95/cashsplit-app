@@ -23,5 +23,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     await pool.query('delete from expenses where id = $1 and user_id = $2', [id, auth.userId])
     return res.json({ ok: true })
   }
+  if (req.method === 'PUT') {
+    const { id } = req.query
+    const { archived } = req.body
+    await pool.query('update expenses set archived = $1 where id = $2 and user_id = $3', [archived, id, auth.userId])
+    return res.json({ ok: true })
+  }
   res.status(405).end()
 }

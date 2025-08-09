@@ -16,7 +16,8 @@ create table if not exists expenses (
   for_members text[] not null,
   note text,
   date timestamptz not null default now(),
-  currency text
+  currency text,
+  archived boolean not null default false
 );
 create table if not exists user_settings (
   user_id text primary key,

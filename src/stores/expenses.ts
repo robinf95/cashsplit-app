@@ -203,7 +203,8 @@ export const useExpenseStore = defineStore('expenses', {
                 note: e.note,
                 date: e.date,
                 currency: e.currency as Currency,
-                user_id: e.user_id
+                user_id: e.user_id,
+                archived: e.archived || false
               }
             })
           this.expenses.push(...newExpenses)
@@ -433,8 +434,9 @@ export const useExpenseStore = defineStore('expenses', {
         const expensesToArchive = this.expenses.filter(e => e.groupId === groupId && !e.archived)
 
         for (const expense of expensesToArchive) {
-          // Update in database (assuming we'll add this to SupabaseService)
-          // For now, just update locally
+          // Update in database using SupabaseService
+          await SupabaseService.archiveExpense(expense.id, this.currentUserId)
+          // Update locally
           expense.archived = true
         }
 
@@ -452,8 +454,14 @@ export const useExpenseStore = defineStore('expenses', {
       try {
         const expense = this.expenses.find(e => e.id === expenseId)
         if (expense) {
+          // Update in database using SupabaseService
+          if (expense.archived) {
+            await SupabaseService.unarchiveExpense(expense.id, this.currentUserId)
+          } else {
+            await SupabaseService.archiveExpense(expense.id, this.currentUserId)
+          }
+          // Update locally
           expense.archived = !expense.archived
-          // TODO: Update in database when SupabaseService supports it
         }
       } catch (error) {
         console.error('Failed to toggle expense archive status:', error)

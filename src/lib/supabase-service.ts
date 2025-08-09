@@ -20,6 +20,7 @@ export interface Expense {
   note?: string
   date: string
   currency?: string
+  archived?: boolean
 }
 
 // Client-side database operations using Supabase
@@ -97,6 +98,26 @@ export class SupabaseService {
       .eq('id', expenseId)
       .eq('user_id', userId)
     
+    if (error) throw error
+  }
+
+  static async archiveExpense(expenseId: string, userId: string): Promise<void> {
+    const { error } = await supabase
+      .from('expenses')
+      .update({ archived: true })
+      .eq('id', expenseId)
+      .eq('user_id', userId)
+
+    if (error) throw error
+  }
+
+  static async unarchiveExpense(expenseId: string, userId: string): Promise<void> {
+    const { error } = await supabase
+      .from('expenses')
+      .update({ archived: false })
+      .eq('id', expenseId)
+      .eq('user_id', userId)
+
     if (error) throw error
   }
 
