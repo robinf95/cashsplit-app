@@ -13,17 +13,31 @@ const routes = [
 const router = createRouter({ history: createWebHistory(), routes })
 
 router.beforeEach(async (to, from, next) => {
-  const clerk = (window as any).Clerk
-
-  // Wait for Clerk to be fully loaded
-  if (!clerk) {
-    return next()
-  }
-
   // Check if route requires authentication
   if (to.meta.requiresAuth) {
-    // Wait for user state to be determined
-    if (clerk.loaded && !clerk.user) {
+    const clerk = (window as any).Clerk
+
+    // If Clerk is not available, allow navigation (fallback)
+    if (!clerk) {
+      return next()
+    }
+
+    // Wait for Clerk to be fully loaded
+    if (!clerk.loaded) {
+      await new Promise(resolve => {
+        const checkLoaded = () => {
+          if (clerk.loaded) {
+            resolve(true)
+          } else {
+            setTimeout(checkLoaded, 100)
+          }
+        }
+        checkLoaded()
+      })
+    }
+
+    // Check if user is authenticated
+    if (!clerk.user) {
       return next('/signin')
     }
   }
