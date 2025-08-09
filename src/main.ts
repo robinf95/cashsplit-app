@@ -3,11 +3,11 @@ import './app.css'
 import { Clerk } from '@clerk/clerk-js'
 import router from "./router";
 import {createPinia} from "pinia";
-import {createApp, h} from "vue";
+import {createApp} from "vue";
 import App from "./App.vue";
 
 async function initializeApp() {
-  const clerkPubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
+  const clerkPubKey = (import.meta as any).env.VITE_CLERK_PUBLISHABLE_KEY
 
   if (!clerkPubKey) {
     console.error('VITE_CLERK_PUBLISHABLE_KEY is not defined')
@@ -19,7 +19,7 @@ async function initializeApp() {
     await clerk.load()
     ;(window as any).Clerk = clerk
 
-    const app = createApp({ render: () => h(App) })
+    const app = createApp(App)
     app.use(createPinia())
     app.use(router)
     app.mount('#app')
