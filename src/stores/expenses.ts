@@ -199,7 +199,9 @@ export const useExpenseStore = defineStore('expenses', {
     async refreshRates(base: Currency, symbols: Currency[]) {
       try {
         const q = symbols.join(',')
-        const resp = await fetch(`/api/fx?base=${base}&symbols=${q}`)
+        // Use external API directly instead of localhost
+        const apiUrl = `https://api.exchangerate.host/latest?base=${encodeURIComponent(base)}&symbols=${encodeURIComponent(q)}`
+        const resp = await fetch(apiUrl)
 
         if (!resp.ok) {
           console.warn(`Exchange rate API returned ${resp.status}, using fallback rates`)
@@ -209,12 +211,13 @@ export const useExpenseStore = defineStore('expenses', {
         }
 
         const data = await resp.json()
-        if (data.rates) {
+        if (data.rates && data.success !== false) {
           for (const k of Object.keys(data.rates)) {
             this.fx[`${base}->${k}`] = data.rates[k]
             this.fx[`${k}->${base}`] = 1 / data.rates[k]
           }
           this.base = base
+          console.log('Exchange rates updated successfully from external API')
 
           // Save to Supabase
           if (this.currentUserId) {
@@ -230,8 +233,49 @@ export const useExpenseStore = defineStore('expenses', {
         }
       } catch (error) {
         console.error('Failed to fetch exchange rates:', error)
-        this.setFallbackRates(base, symbols)
+        // Try alternative API as fallback
+        await this.tryAlternativeExchangeAPI(base, symbols)
       }
+    },
+
+    async tryAlternativeExchangeAPI(base: Currency, symbols: Currency[]) {
+      try {
+        // Try alternative free API: Fixer.io free tier or ExchangeRate-API
+        const q = symbols.join(',')
+        const alternativeUrl = `https://api.exchangerate-api.com/v4/latest/${base}`
+        const resp = await fetch(alternativeUrl)
+
+        if (resp.ok) {
+          const data = await resp.json()
+          if (data.rates) {
+            // Filter only requested symbols
+            for (const symbol of symbols) {
+              if (data.rates[symbol]) {
+                this.fx[`${base}->${symbol}`] = data.rates[symbol]
+                this.fx[`${symbol}->${base}`] = 1 / data.rates[symbol]
+              }
+            }
+            this.base = base
+            console.log('Exchange rates updated from alternative API')
+
+            // Save to Supabase
+            if (this.currentUserId) {
+              try {
+                await SupabaseService.updateExchangeRates(this.currentUserId, this.fx, base)
+              } catch (error) {
+                console.error('Failed to save exchange rates:', error)
+              }
+            }
+            return
+          }
+        }
+      } catch (error) {
+        console.error('Alternative exchange API also failed:', error)
+      }
+
+      // If all APIs fail, use fallback rates
+      console.warn('All exchange rate APIs failed, using static fallback rates')
+      this.setFallbackRates(base, symbols)
     },
 
     setFallbackRates(base: Currency, symbols: Currency[]) {
